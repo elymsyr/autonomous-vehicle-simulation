@@ -1,91 +1,85 @@
 import numpy as np
 import cv2
-import math
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
 
 class BirdEyeViewMapping():
     def __init__(self, width, height) -> None:
         self.width = width
         self.height = height
-    
-    def pipeline(self, image):
-        region_of_interest_vertices = [
-            (0, self.height),
-            (self.width / 2, self.height / 2),
-            (self.width, self.height),
+        self.interest_vertices = [
+            (int(0.1*self.width), int(0.57*self.height)), # left top
+            (int(-6*self.width), int(self.height)),     # left bottom (adjusted to image edge)
+            (int(0.9*self.width), int(0.57*self.height)),   # right top
+            (int(7*self.width), int(self.height))       # right bottom (adjusted to image edge)
         ]
-        
-        polygon = np.array(region_of_interest_vertices, np.int32)
-        polygon = polygon.reshape((-1, 1, 2))  # Reshape for polylines
+        self.desired_points = np.float32(self.interest_vertices)
+        self.image_corners = np.float32([[0, 0], [0, self.height], [self.width, 0], [self.width, self.height]])
+        self.matrix = cv2.getPerspectiveTransform(self.desired_points, self.image_corners)
+        self.inv_matrix = cv2.getPerspectiveTransform(self.image_corners, self.desired_points)        
 
-        # Draw the polygon outline
-        cv2.polylines(image, [polygon], isClosed=True, color=(255, 120, 0), thickness=2)
+    def perspective_transform_point(self, point):
+        point_homogeneous = np.array([point[0], point[1], 1.0])
+        transformed_point = np.dot(self.matrix, point_homogeneous)
+        transformed_point /= transformed_point[2]
+        return tuple(map(int, transformed_point[:2]))
 
-        # Convert to grayscale and apply Canny edge detection
+    def perspective_transform(self, image):
+        # for point in self.interest_vertices:
+        #     cv2.circle(image, point, 5, (255,0,0), 3)
+        transformed_frame = cv2.warpPerspective(image, self.matrix, (self.width, self.height))
+        return transformed_frame
+
+    def adjust_contrast(self, image, alpha = 2.5, beta = -60):
+        return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)        
+
+    def canny_image(self, image):
         gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        cannyed_image = cv2.Canny(gray_image, 100, 200)
+        adjusted_image = self.adjust_contrast(gray_image)
+        cannyed_image = cv2.Canny(adjusted_image, 100, 200)
+        return cannyed_image
 
-        # Mask out the region of interest
-        cropped_image = self.region_of_interest(
-            cannyed_image,
-            np.array([region_of_interest_vertices], np.int32)
-        )
+    def show_image(self, image, image2 = None):
+        cv2.imshow('test', image)
+        if image2 is not None: cv2.imshow('test2', image2)
+        if cv2.waitKey(100000) == 27: return
+        
+    def region_by_channel(self, image, cluster=3):
+        adjusted_image = self.adjust_contrast(image, alpha=2.5, beta=-60)
+        dark_channel = self.get_dark_channel(adjusted_image, patch_size=30)
+        img_2D = dark_channel.reshape((-1, 1))
+        
+        kmeans = KMeans(cluster, init='k-means++', max_iter=250, n_init=10, random_state=35).fit(img_2D)
+        values = kmeans.predict(img_2D)
+        mask1 = values.reshape((image.shape[0], image.shape[1]))
+        mask1 = np.expand_dims(mask1, axis=-1)
+        centers = kmeans.cluster_centers_.astype(int)
 
-        # Perform Hough Line Transformation to detect lines
-        lines = cv2.HoughLinesP(
-            cropped_image,
-            rho=6,
-            theta=np.pi / 60,
-            threshold=160,
-            lines=np.array([]),
-            minLineLength=40,
-            maxLineGap=25
-        )
+        # Create an empty image with the same height and width as the original
+        clustered_image = np.zeros_like(image)
 
-        # Separating left and right lines based on slope
-        left_line_x = []
-        left_line_y = []
-        right_line_x = []
-        right_line_y = []
+        # Assign colors based on the predicted values
+        for i in range(cluster):
+            clustered_image[mask1[:, :, 0] == i] = centers[i]
 
-        if lines is None:
-            return image
+        # Convert clustered_image to uint8 if not already
+        clustered_image = np.clip(clustered_image, 0, 255).astype(np.uint8)
+        return clustered_image
 
-        for line in lines:
-            for x1, y1, x2, y2 in line:
-                slope = (y2 - y1) / (x2 - x1) if (x2 - x1) != 0 else 0
-                if math.fabs(slope) < 0.5:  # Ignore nearly horizontal lines
-                    continue
-                if slope <= 0:  # Left lane
-                    left_line_x.extend([x1, x2])
-                    left_line_y.extend([y1, y2])
-                else:  # Right lane
-                    right_line_x.extend([x1, x2])
-                    right_line_y.extend([y1, y2])
+    def get_dark_channel(self, image, patch_size=15):
+        # Min value across the RGB channels
+        min_channel = np.min(image, axis=2)
+        # Apply a min filter with the given patch size
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (patch_size, patch_size))
+        dark_channel = cv2.erode(min_channel, kernel)
+        return dark_channel
 
-        # Fit a linear polynomial to the left and right lines
-        min_y = int(image.shape[0] * (3 / 5))  # Slightly below the middle of the image
-        max_y = image.shape[0]  # Bottom of the image
+# img = cv2.imread("media/city-car-example-4.png")
 
-        if left_line_x and left_line_y:
-            poly_left = np.poly1d(np.polyfit(left_line_y, left_line_x, deg=1))
-            left_x_start = int(poly_left(max_y))
-            left_x_end = int(poly_left(min_y))
-        else:
-            left_x_start, left_x_end = 0, 0  # Defaults self, if no lines detected
+# asa = BirdEyeViewMapping(img.shape[1], img.shape[0])
 
-        if right_line_x and right_line_y:
-            poly_right = np.poly1d(np.polyfit(right_line_y, right_line_x, deg=1))
-            right_x_start = int(poly_right(max_y))
-            right_x_end = int(poly_right(min_y))
-        else:
-            right_x_start, right_x_end = 0, 0  # Defaults self, if no lines detected
+# perspective_transform = asa.perspective_transform(image=img)
 
-        # Create the filled polygon between the left and right lane lines
-        lane_image = self.draw_lane_lines(
-            image,
-            [left_x_start, max_y, left_x_end, min_y],
-            [right_x_start, max_y, right_x_end, min_y]
-        )
+# # cv2.imwrite('media/segmented_image.png', region_image)
+# asa.show_image(perspective_transform)
 
-        return lane_image
-    

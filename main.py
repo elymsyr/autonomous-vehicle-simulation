@@ -5,6 +5,7 @@ import cv2
 import mss
 from time import perf_counter
 from lane import *
+from mapping import BirdEyeViewMapping
 from collections import defaultdict
 
 class CityDriveCapture():
@@ -76,8 +77,14 @@ class CityDriveCapture():
             return distance
         else: 0
 
-    def process_frame(self, show_result):
-        canvas = np.ones((600, self.window_image.shape[1], 3), dtype=np.uint8)
+    def bev(self, x, y, h, id, canvas):
+        transformed_point = self.bev_transformer.perspective_transform_point((x, y+h))
+        canvas = cv2.circle(canvas, transformed_point, 5, (255, 0, 0), -1)  # (x, y+h) center, 5 radius, blue color
+        canvas = cv2.putText(canvas, str(id), transformed_point, cv2.FONT_HERSHEY_SIMPLEX, 
+                            0.8, (0, 0, 0), 2)  # White text, thickness 2
+        return canvas
+
+    def process_frame(self, show_result, canvas):
         # Run YOLOv8 to detect cars in the current self.window_image
         results = self.model.track(\
             cv2.rectangle(self.window_image, (int(0.15*self.width), int(0.82*self.height)),\
@@ -99,10 +106,10 @@ class CityDriveCapture():
             self.window_image = results[0].plot(img=self.window_image)
 
             if self.window_image is not None:
-                detected_points = []
                 for box, track_id, class_id in zip(boxes, track_ids, class_ids):
                     if names[class_id] in self.classes:
                         x, y, w, h = box
+                        canvas = self.bev(x, y, h, track_id, canvas)
                         track = self.track_history[track_id]
                         track.append((float(x), float(y)))  # x, y center point
                         if len(track) > 30:  # retain 90 tracks for 90 self.window_images
@@ -115,28 +122,6 @@ class CityDriveCapture():
                         distance_label = f'{distance:.2f}m'
                         cv2.putText(self.window_image, distance_label, (x, y + 20),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-                        cv2.putText(self.window_image, "0", (x+w//2, y+h//2),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-                        if distance <= 99:
-                            detected_points.append((class_id, (self.window_image.shape[1]//2+w)*2, distance*10, track_id))
-
-                for point in detected_points:
-                    print(point)
-                    class_id, x, y, track_id = point
-                    cv2.circle(canvas, (int(x), int(y)), radius=18 if names[class_id] == 'car' else 11, color=(0, 255, 0) if names[class_id] == 'car' else (255, 0, 0), thickness=-1)
-                    # Calculate the size of the text
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    font_scale = 1.2
-                    font_thickness = 2
-                    text_size = cv2.getTextSize(f"{track_id}", font, font_scale, font_thickness)[0]
-                    
-                    # Find the bottom-left corner of the text inside the circle
-                    text_x = int(x - text_size[0] // 2)  # Center the text horizontally
-                    text_y = int(y + text_size[1] // 2)  # Center the text vertically
-                    
-                    # Put the text inside the circle
-                    cv2.putText(canvas, f"{track_id}", (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness, lineType=cv2.LINE_AA)
-
 
         # FPS calculation
         currTime = perf_counter()
@@ -151,8 +136,8 @@ class CityDriveCapture():
                 merged_image = np.vstack((cv2.cvtColor(cv2.resize(self.sliding_windows, (811, 414)), cv2.COLOR_GRAY2BGR), cv2.resize(self.window_image, (811, 414))))
                 cv2.imshow(f'{self.window_title} Results', merged_image)
             else:
+                if canvas is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGEaa', canvas)
                 if self.window_image is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGE', cv2.resize(self.window_image, (self.window_image.shape[1]//2, self.window_image.shape[0]//2)))
-                if canvas is not None: cv2.imshow(f'{self.window_title}', cv2.resize(canvas, (canvas.shape[1]//2, canvas.shape[0]//2)))
                 if self.sliding_windows is not None: cv2.imshow(f'{self.window_title} SLIDING WINDOWS IMAGE', cv2.resize(self.sliding_windows, (self.sliding_windows.shape[1]//2, self.sliding_windows.shape[0]//2)))
 
         # Write self.window_image to video if enabled
@@ -169,6 +154,9 @@ class CityDriveCapture():
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.lane_detector = LaneDetectorU(self.width, self.height)
+        self.bev_transformer = BirdEyeViewMapping(self.width, self.height)
+        canvas = np.ones((self.height, self.width, 3))
+        canvas = self.bev_transformer.perspective_transform(canvas) 
 
         if self.video_output:
             # fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for AVI format
@@ -180,7 +168,7 @@ class CityDriveCapture():
         while self.cap.isOpened():
             ret, self.window_image = self.cap.read()
             if ret:
-                self.process_frame(show_result)
+                self.process_frame(show_result, canvas.copy())
 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
@@ -202,9 +190,10 @@ class CityDriveCapture():
                 self.window_image = self.capture(sct)
                 self.width, self.height = int(self.window_image.shape[1]), int(self.window_image.shape[0])
                 self.lane_detector = LaneDetectorU(self.width, self.height)
-
-                prevTime = 0
-                fps = 0
+                self.bev_transformer = BirdEyeViewMapping(self.width, self.height)
+                canvas = np.ones((self.height, self.width, 3))
+                self.bev_transformer.show_image(canvas)
+                canvas = self.bev_transformer.perspective_transform(canvas) 
                 self.fps_list = []
 
                 if self.video_output:
@@ -216,7 +205,7 @@ class CityDriveCapture():
                 while True:
                     self.window_image = self.capture(sct)
                     if self.window_image is not None:
-                        self.process_frame(self.window_image, show_result)
+                        self.process_frame(show_result, canvas.copy())
 
                         if cv2.waitKey(1) & 0xFF == ord('q'):
                             break
@@ -230,8 +219,8 @@ class CityDriveCapture():
                 self.video_writer.release()
             cv2.destroyAllWindows()
 
-
 if '__main__' == __name__:
     model_path = f'weights/yolov8n.pt'
-    agent = CityDriveCapture(model_path=model_path, video_input='media/city_car.mp4')
+    agent = CityDriveCapture(model_path=model_path, video_input='media/city_car_test.mp4')
     agent.window_linux()
+
