@@ -5,7 +5,7 @@ import cv2
 import mss
 from time import perf_counter
 from lane import *
-from mapping import BirdEyeViewMapping
+from mapping import BirdEyeViewMapping, SmoothCircle
 from collections import defaultdict
 
 class CityDriveCapture():
@@ -31,6 +31,8 @@ class CityDriveCapture():
         self.fps = fps
         self.video_writer = None
         self.cap = None
+        
+        self.move_circles: dict[int, SmoothCircle] = {}
 
     def capture(self, sct):
         img = sct.grab(self.monitor)
@@ -77,11 +79,11 @@ class CityDriveCapture():
             return distance
         else: 0
 
-    def bev(self, x, y, h, id, canvas):
-        transformed_point = self.bev_transformer.perspective_transform_point((x, y+h))
-        canvas = cv2.circle(canvas, transformed_point, 5, (255, 0, 0), -1)  # (x, y+h) center, 5 radius, blue color
+    def bev(self, x, y, id, canvas):
+        transformed_point = self.bev_transformer.perspective_transform_point((x, y))
+        canvas = cv2.circle(canvas, transformed_point, 15, (255, 0, 0), -1)
         canvas = cv2.putText(canvas, str(id), transformed_point, cv2.FONT_HERSHEY_SIMPLEX, 
-                            0.8, (0, 0, 0), 2)  # White text, thickness 2
+                            0.8, (0, 0, 0), 2)
         return canvas
 
     def process_frame(self, show_result, canvas):
@@ -103,25 +105,28 @@ class CityDriveCapture():
             
             # self.window_image, self.sliding_windows, *_ = self.lane_detector.detect_lane(self.window_image)
             # self.sliding_windows, *_ = self.lane_detector.detect_lane(self.window_image)
-            self.window_image = results[0].plot(img=self.window_image)
+            self.window_image = results[0].plot(img=self.window_image, line_width=2)
 
             if self.window_image is not None:
                 for box, track_id, class_id in zip(boxes, track_ids, class_ids):
-                    if names[class_id] in self.classes:
+                    if True: # names[class_id] in self.classes
                         x, y, w, h = box
-                        canvas = self.bev(x, y, h, track_id, canvas)
+                        
+                        if track_id not in self.move_circles.keys():
+                            self.move_circles[track_id] = SmoothCircle(center=[x, y+h//2], radius=10, track_id=track_id)
+                            canvas = self.bev(x, y+h//2, track_id, canvas)
+                        else:
+                            self.move_circles[track_id].update_point(np.array([x, y+h//2]))
+                            new_x, new_y = tuple(self.move_circles[track_id].center.astype(int))
+                            canvas = self.bev(int(new_x), int(new_y), track_id, canvas)
                         track = self.track_history[track_id]
                         track.append((float(x), float(y)))  # x, y center point
+                        
                         if len(track) > 30:  # retain 90 tracks for 90 self.window_images
                             track.pop(0)
+                        
                         points = np.hstack(track).astype(np.int32).reshape((-1, 1, 2))
                         cv2.polylines(self.window_image, [points], isClosed=False, color=(230, 230, 230), thickness=10)
-                        # Draw the tracking lines
-                        distance = self.estimate_distance(w, h, names[class_id].strip())
-                        # Display the estimated distance
-                        distance_label = f'{distance:.2f}m'
-                        cv2.putText(self.window_image, distance_label, (x, y + 20),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         # FPS calculation
         currTime = perf_counter()
