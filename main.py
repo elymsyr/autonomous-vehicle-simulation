@@ -79,11 +79,30 @@ class CityDriveCapture():
             return distance
         else: 0
 
-    def bev(self, x, y, id, canvas):
-        transformed_point = self.bev_transformer.perspective_transform_point((x, y))
-        canvas = cv2.circle(canvas, transformed_point, 15, (255, 0, 0), -1)
-        canvas = cv2.putText(canvas, str(id), transformed_point, cv2.FONT_HERSHEY_SIMPLEX, 
-                            0.8, (0, 0, 0), 2)
+    def bev(self, transformed_point, id, canvas, predicted_points = None):
+        radius = 16
+        canvas = cv2.circle(canvas, transformed_point, radius, (255, 0, 0), -1)
+        text = str(id)
+        text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+        text_x = transformed_point[0] - text_size[0] // 2
+        text_y = transformed_point[1] + text_size[1] // 2
+        canvas = cv2.putText(canvas, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
+                            0.6, (0, 0, 0), 2)
+        if predicted_points is not None:
+            canvas = self.draw_lines_and_circle(predicted_points, canvas, transformed_point)
+                    
+        return canvas
+    
+    def draw_lines_and_circle(self, predicted_points, canvas, start_point):
+        # Convert the start point to an integer tuple
+        start_point = tuple(map(int, start_point))
+        points_to_draw = [start_point] + [tuple(map(int, p)) for p in predicted_points]
+        for point_index in range(len(points_to_draw) - 1):
+            point1 = points_to_draw[point_index]
+            point2 = points_to_draw[point_index + 1]
+            canvas = cv2.line(canvas, point1, point2, color=(0, 0, 255), thickness=2)  # Red lines
+        last_point = points_to_draw[-1]
+        canvas = cv2.circle(canvas, last_point, radius=16, color=(0, 0, 255), thickness=1)  # Red outline
         return canvas
 
     def process_frame(self, show_result, canvas):
@@ -110,15 +129,17 @@ class CityDriveCapture():
             if self.window_image is not None:
                 for box, track_id, class_id in zip(boxes, track_ids, class_ids):
                     if True: # names[class_id] in self.classes
-                        x, y, w, h = box
+                        x, y, _, h = box
                         
                         if track_id not in self.move_circles.keys():
-                            self.move_circles[track_id] = SmoothCircle(center=[x, y+h//2], radius=10, track_id=track_id)
-                            canvas = self.bev(x, y+h//2, track_id, canvas)
+                            self.move_circles[track_id] = SmoothCircle(center=[x, y+h//2], radius=6, track_id=track_id)
+                            transformed_point = self.bev_transformer.perspective_transform_point((x, y+h//2))
+                            canvas = self.bev(transformed_point, track_id, canvas)
                         else:
-                            self.move_circles[track_id].update_point(np.array([x, y+h//2]))
+                            predicted_points = self.move_circles[track_id].update_point(np.array([x, y+h//2]))
                             new_x, new_y = tuple(self.move_circles[track_id].center.astype(int))
-                            canvas = self.bev(int(new_x), int(new_y), track_id, canvas)
+                            transformed_point = self.bev_transformer.perspective_transform_point((int(new_x), int(new_y)))
+                            canvas = self.bev(transformed_point, track_id, canvas, predicted_points)
                         track = self.track_history[track_id]
                         track.append((float(x), float(y)))  # x, y center point
                         
@@ -161,7 +182,8 @@ class CityDriveCapture():
         self.lane_detector = LaneDetectorU(self.width, self.height)
         self.bev_transformer = BirdEyeViewMapping(self.width, self.height)
         canvas = np.ones((self.height, self.width, 3))
-        canvas = self.bev_transformer.perspective_transform(canvas) 
+        canvas = self.bev_transformer.perspective_transform(canvas)
+        
 
         if self.video_output:
             # fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for AVI format
@@ -197,8 +219,7 @@ class CityDriveCapture():
                 self.lane_detector = LaneDetectorU(self.width, self.height)
                 self.bev_transformer = BirdEyeViewMapping(self.width, self.height)
                 canvas = np.ones((self.height, self.width, 3))
-                self.bev_transformer.show_image(canvas)
-                canvas = self.bev_transformer.perspective_transform(canvas) 
+                canvas = self.bev_transformer.perspective_transform(canvas)
                 self.fps_list = []
 
                 if self.video_output:

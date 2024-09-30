@@ -1,7 +1,5 @@
 media/
-test.py
-test2.py
-
+exp/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
