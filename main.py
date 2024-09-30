@@ -96,7 +96,7 @@ class CityDriveCapture():
     def draw_lines_and_circle(self, predicted_points, canvas, start_point):
         # Convert the start point to an integer tuple
         start_point = tuple(map(int, start_point))
-        points_to_draw = [start_point] + [tuple(map(int, p)) for p in predicted_points]
+        points_to_draw = [start_point] + [self.bev_transformer.perspective_transform_point(tuple(map(int, p))) for p in predicted_points]
         for point_index in range(len(points_to_draw) - 1):
             point1 = points_to_draw[point_index]
             point2 = points_to_draw[point_index + 1]
@@ -183,7 +183,8 @@ class CityDriveCapture():
         self.bev_transformer = BirdEyeViewMapping(self.width, self.height)
         canvas = np.ones((self.height, self.width, 3))
         canvas = self.bev_transformer.perspective_transform(canvas)
-        
+        points = np.array(self.bev_transformer.alert_area).reshape((-1, 1, 2)).astype(np.int32)
+        canvas = cv2.polylines(canvas, [points], isClosed=True, color=(0, 255, 0), thickness=2)
 
         if self.video_output:
             # fourcc = cv2.VideoWriter_fourcc(*'XVID')  # Codec for AVI format
@@ -220,6 +221,9 @@ class CityDriveCapture():
                 self.bev_transformer = BirdEyeViewMapping(self.width, self.height)
                 canvas = np.ones((self.height, self.width, 3))
                 canvas = self.bev_transformer.perspective_transform(canvas)
+                points = np.array(self.bev_transformer.alert_area).reshape((-1, 1, 2)).astype(np.int32)
+                canvas = cv2.polylines(canvas, [points], isClosed=True, color=(0, 255, 0), thickness=2)
+
                 self.fps_list = []
 
                 if self.video_output:

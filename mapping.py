@@ -17,6 +17,15 @@ class BirdEyeViewMapping():
         self.matrix = cv2.getPerspectiveTransform(self.desired_points, self.image_corners)
         self.inv_matrix = cv2.getPerspectiveTransform(self.image_corners, self.desired_points)
         self.view_point = self.perspective_transform_point((self.width//2, self.height))
+        self.alert_area = self.alert_area_calc()
+
+    def alert_area_calc(self):
+        return [
+            self.perspective_transform_point((int(0.42 * self.width),int(0.64 * self.height))),  # left top
+            self.perspective_transform_point((int(0.17 * self.width),int(0.95 * self.height))),  # left bottom
+            self.perspective_transform_point((int(0.74 * self.width),int(0.95 * self.height))),   # right bottom
+            self.perspective_transform_point((int(0.56 * self.width),int(0.64 * self.height))),  # right top
+            ]
 
     def perspective_transform_point(self, point):
         point_homogeneous = np.array([point[0], point[1], 1.0])
@@ -77,8 +86,6 @@ class BirdEyeViewMapping():
         
         return distance
 
-import numpy as np
-
 class SmoothCircle():
     def __init__(self, center, track_id, radius=5):
         self.track_id = track_id
@@ -96,26 +103,28 @@ class SmoothCircle():
             self.positions.append(new_point)
             self.reset_history_on_opposite_direction()
 
-    def detect_opposite_direction(self, vector1, vector2):
-        """Detect if vector2 is an opposite movement to vector1"""
-        # Opposite direction in x-axis: moving left to right or right to left
-        if (vector1[0] > 0 and vector2[0] < 0) or (vector1[0] < 0 and vector2[0] > 0):
-            return True
-        # Opposite direction in y-axis: moving up to down or down to up
-        if (vector1[1] > 0 and vector2[1] < 0) or (vector1[1] < 0 and vector2[1] > 0):
-            return True
+    def detect_opposite_direction(self, overall_vector, new_vector):
+        """Detect if the new_vector indicates a direction opposite to the overall movement."""
+        # Compute the dot product to find the angle between the vectors
+        dot_product = np.dot(overall_vector, new_vector)
+        if dot_product < 0:
+            return True  # The vectors are moving in opposite directions
         return False
-
+    
     def reset_history_on_opposite_direction(self):
+        """Reset history if a significant change in direction is detected."""
         if len(self.positions) >= 3:
+            # Calculate overall movement vector (from the first to the last position)
+            overall_vector = self.positions[-1] - self.positions[0]
+            
             for i in range(1, len(self.positions) - 1):
-                vector1 = self.positions[i] - self.positions[i - 1]
-                vector2 = self.positions[i + 1] - self.positions[i]
-
-                if self.detect_opposite_direction(vector1, vector2):
-                    # Reset history starting from the last valid position
+                current_vector = self.positions[i + 1] - self.positions[i]
+                
+                # Check if the new vector is opposite to the overall trend
+                if self.detect_opposite_direction(overall_vector, current_vector):
+                    # Reset history starting from the point of change
                     self.positions = self.positions[i:]
-                    break  # Exit the loop after resetting
+                    break
 
     def predict_next_n_moves(self, n=3):
         # Reset history if opposite direction is detected
@@ -138,13 +147,15 @@ class SmoothCircle():
 
         dx /= (len(last_positions) - 1)
         dy /= (len(last_positions) - 1)
-
+        
         # Initialize list to store predicted positions
         predicted_positions = []
         current_position = last_positions[-1]
 
         # Predict the next 'n' moves
         for i in range(n):
+            dx = dx * (5 if dx < .4 and dx > -.4 else 1)
+            dy = dy * (5 if dy < .4 and dy > -.4 else 1)
             next_position = current_position + np.array([dx, dy])
             predicted_positions.append(next_position)
             current_position = next_position  # Update current position for the next iteration
@@ -155,10 +166,18 @@ class SmoothCircle():
         """ Update the point's position while keeping it within the circle. """
         self.point = new_point
         self.push_circle_if_needed()
+
         self.update_positions(new_point)  # Update the position history
         next_path = self.predict_next_n_moves()
+        # if self.track_id in [30,5]: 
+        #     print(f"Center: {self.center} -> ", end=" ")
+        #     for point in next_path:
+        #         print(tuple(map(int, point)), end=' - ')                
+        #     for point in self.positions:
+        #         print(tuple(map(int, point)), end=', ')
+        #     print("\n")        
+        
         return next_path
-
 
     def push_circle_if_needed(self):
         """ Push the circle if the point reaches the edge and continues to move. """
@@ -167,7 +186,6 @@ class SmoothCircle():
             direction = (self.point - self.center) / distance
             self.center += direction * (distance - self.radius)
             self.positions.append(self.center)
-
 
     def draw(self, canvas):
         cv2.circle(canvas, tuple(map(int, self.center)), int(self.radius), (0, 255, 0), 2)
@@ -178,10 +196,6 @@ class SmoothCircle():
         self.center = point
 
 class ImageOperations():
-    def __init__(self, width, height) -> None:
-        self.width = width
-        self.height = height
-    
     @staticmethod
     def adjust_contrast(image, alpha = 2.5, beta = -60):
         return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)        
@@ -230,12 +244,3 @@ class ImageOperations():
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (patch_size, patch_size))
         dark_channel = cv2.erode(min_channel, kernel)
         return dark_channel
-
-# img = cv2.imread("media/city-car-example-7.png")
-
-# asa = BirdEyeViewMapping(img.shape[1], img.shape[0])
-
-# perspective_transform = asa.camera_transform(image=img)
-
-# # cv2.imwrite('media/segmented_image.png', region_image)
-# ImageOperations.show_image(perspective_transform)
