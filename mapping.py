@@ -17,7 +17,7 @@ class BirdEyeViewMapping():
         self.matrix = cv2.getPerspectiveTransform(self.desired_points, self.image_corners)
         self.inv_matrix = cv2.getPerspectiveTransform(self.image_corners, self.desired_points)
         self.view_point = self.perspective_transform_point((self.width//2, self.height))
-        self.alert_area = self.alert_area_calc()
+        self.alert_area = np.array(self.alert_area_calc(), dtype=np.int32)
 
     def alert_area_calc(self):
         return [
@@ -85,6 +85,9 @@ class BirdEyeViewMapping():
         distance = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
         
         return distance
+
+    def area_check(self, point):
+        return True if cv2.pointPolygonTest(self.alert_area, point, measureDist=False) > 0 else False
 
 class SmoothCircle():
     def __init__(self, center, track_id, radius=5):

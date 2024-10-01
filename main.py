@@ -90,13 +90,19 @@ class CityDriveCapture():
                             0.6, (0, 0, 0), 2)
         if predicted_points is not None:
             canvas = self.draw_lines_and_circle(predicted_points, canvas, transformed_point)
-                    
+
         return canvas
-    
+
+    def check_alert_area(self, points):
+        point_checked = []
+        for point in points:
+            point_checked.append(True if self.bev_transformer.area_check(point=point) else False)
+        return point_checked
+
     def draw_lines_and_circle(self, predicted_points, canvas, start_point):
         # Convert the start point to an integer tuple
         start_point = tuple(map(int, start_point))
-        points_to_draw = [start_point] + [self.bev_transformer.perspective_transform_point(tuple(map(int, p))) for p in predicted_points]
+        points_to_draw = [start_point] + predicted_points
         for point_index in range(len(points_to_draw) - 1):
             point1 = points_to_draw[point_index]
             point2 = points_to_draw[point_index + 1]
@@ -119,9 +125,7 @@ class CityDriveCapture():
             class_ids = results[0].boxes.cls.cpu().tolist()
             track_ids = results[0].boxes.id.int().cpu().tolist()
             names = results[0].names
-            
-            # Visualize the results on the self.window_image
-            
+
             # self.window_image, self.sliding_windows, *_ = self.lane_detector.detect_lane(self.window_image)
             # self.sliding_windows, *_ = self.lane_detector.detect_lane(self.window_image)
             self.window_image = results[0].plot(img=self.window_image, line_width=2)
@@ -130,22 +134,29 @@ class CityDriveCapture():
                 for box, track_id, class_id in zip(boxes, track_ids, class_ids):
                     if True: # names[class_id] in self.classes
                         x, y, _, h = box
-                        
+                        alert = False
                         if track_id not in self.move_circles.keys():
                             self.move_circles[track_id] = SmoothCircle(center=[x, y+h//2], radius=6, track_id=track_id)
                             transformed_point = self.bev_transformer.perspective_transform_point((x, y+h//2))
                             canvas = self.bev(transformed_point, track_id, canvas)
                         else:
                             predicted_points = self.move_circles[track_id].update_point(np.array([x, y+h//2]))
+                            predicted_points = [self.bev_transformer.perspective_transform_point(tuple(map(int, p))) for p in predicted_points]
+                            for point in predicted_points:
+                                if self.bev_transformer.area_check(point): alert = True
                             new_x, new_y = tuple(self.move_circles[track_id].center.astype(int))
                             transformed_point = self.bev_transformer.perspective_transform_point((int(new_x), int(new_y)))
                             canvas = self.bev(transformed_point, track_id, canvas, predicted_points)
                         track = self.track_history[track_id]
-                        track.append((float(x), float(y)))  # x, y center point
-                        
-                        if len(track) > 30:  # retain 90 tracks for 90 self.window_images
+                        track.append((float(x), float(y)))
+                        if self.bev_transformer.area_check(transformed_point): alert = True
+
+                        if alert:
+                            self.window_image = cv2.circle(self.window_image, (x,y), 14, (0, 0, 255), 3)
+
+                        if len(track) > 30:
                             track.pop(0)
-                        
+
                         points = np.hstack(track).astype(np.int32).reshape((-1, 1, 2))
                         cv2.polylines(self.window_image, [points], isClosed=False, color=(230, 230, 230), thickness=10)
 
