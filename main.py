@@ -100,15 +100,26 @@ class CityDriveCapture():
         return point_checked
 
     def draw_lines_and_circle(self, predicted_points, canvas, start_point):
-        # Convert the start point to an integer tuple
         start_point = tuple(map(int, start_point))
         points_to_draw = [start_point] + predicted_points
+        
         for point_index in range(len(points_to_draw) - 1):
             point1 = points_to_draw[point_index]
             point2 = points_to_draw[point_index + 1]
             canvas = cv2.line(canvas, point1, point2, color=(0, 0, 255), thickness=2)  # Red lines
         last_point = points_to_draw[-1]
         canvas = cv2.circle(canvas, last_point, radius=16, color=(0, 0, 255), thickness=1)  # Red outline
+        
+        distance = self.bev_transformer.distance_between_points(start_point, self.bev_transformer.view_point)
+        distance_text = f"{distance:.2f}"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.5
+        thickness = 1
+        text_size = cv2.getTextSize(distance_text, font, font_scale, thickness)[0]
+        text_x = last_point[0] - text_size[0] // 2
+        text_y = last_point[1] + 30
+
+        canvas = cv2.putText(canvas, distance_text, (text_x, text_y), font, font_scale, (0, 0, 255), thickness)
         return canvas
 
     def process_frame(self, show_result, canvas):
@@ -137,15 +148,15 @@ class CityDriveCapture():
                         alert = False
                         if track_id not in self.move_circles.keys():
                             self.move_circles[track_id] = SmoothCircle(center=[x, y+h//2], radius=6, track_id=track_id)
-                            transformed_point = self.bev_transformer.perspective_transform_point((x, y+h//2))
+                            transformed_point = self.bev_transformer.perspective_transform_point((x, y+h//2), track_id)
                             canvas = self.bev(transformed_point, track_id, canvas)
                         else:
                             predicted_points = self.move_circles[track_id].update_point(np.array([x, y+h//2]))
-                            predicted_points = [self.bev_transformer.perspective_transform_point(tuple(map(int, p))) for p in predicted_points]
+                            predicted_points = [self.bev_transformer.perspective_transform_point(tuple(map(int, p)), track_id) for p in predicted_points]
                             for point in predicted_points:
                                 if self.bev_transformer.area_check(point): alert = True
                             new_x, new_y = tuple(self.move_circles[track_id].center.astype(int))
-                            transformed_point = self.bev_transformer.perspective_transform_point((int(new_x), int(new_y)))
+                            transformed_point = self.bev_transformer.perspective_transform_point((int(new_x), int(new_y)), track_id)
                             canvas = self.bev(transformed_point, track_id, canvas, predicted_points)
                         track = self.track_history[track_id]
                         track.append((float(x), float(y)))
@@ -173,7 +184,7 @@ class CityDriveCapture():
                 merged_image = np.vstack((cv2.cvtColor(cv2.resize(self.sliding_windows, (811, 414)), cv2.COLOR_GRAY2BGR), cv2.resize(self.window_image, (811, 414))))
                 cv2.imshow(f'{self.window_title} Results', merged_image)
             else:
-                if canvas is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGEaa', canvas)
+                if canvas is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGEaa', cv2.resize(canvas, (int(canvas.shape[1]//1.6), int(canvas.shape[0]//1.6))))
                 if self.window_image is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGE', cv2.resize(self.window_image, (self.window_image.shape[1]//2, self.window_image.shape[0]//2)))
                 if self.sliding_windows is not None: cv2.imshow(f'{self.window_title} SLIDING WINDOWS IMAGE', cv2.resize(self.sliding_windows, (self.sliding_windows.shape[1]//2, self.sliding_windows.shape[0]//2)))
 
@@ -264,4 +275,3 @@ if '__main__' == __name__:
     model_path = f'weights/yolov8n.pt'
     agent = CityDriveCapture(model_path=model_path, video_input='media/city_car_test.mp4')
     agent.window_linux()
-

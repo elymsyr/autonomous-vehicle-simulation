@@ -27,23 +27,26 @@ class BirdEyeViewMapping():
             self.perspective_transform_point((int(0.56 * self.width),int(0.64 * self.height))),  # right top
             ]
 
-    def perspective_transform_point(self, point):
+    def perspective_transform_point(self, point, track_id = None):
         point_homogeneous = np.array([point[0], point[1], 1.0])
         transformed_point = np.dot(self.matrix, point_homogeneous)
         transformed_point /= transformed_point[2]
         return tuple(map(int, transformed_point[:2]))
 
-    def perspective_transform_point_w_distance_estimation(self, point, a=0.1, b=1.00012):
+    def perspective_transform_point_w_distance_estimation(self, point, track_id, a=0.1, b=1.00012):
         point_homogeneous = np.array([point[0], point[1], 1.0])
         transformed_point = np.dot(self.matrix, point_homogeneous)
         transformed_point /= transformed_point[2]
         x, y = tuple(map(int, transformed_point[:2]))
-        
-        distance = self.distance_between_points((x,y), self.view_point)
-        new_distance = int(self.f(distance, a=a, b=b))
-        print(f"{distance:.0f} - {new_distance:.0f}")
-        x, y = self.new_point_on_line((x,y), new_distance)
-
+        if track_id == 6:
+            print(track_id)
+            print(f"Before: {x},{y}")
+            distance = self.distance_between_points((x,y), self.view_point)
+            reducer = self.f_polynomial(distance)
+            new_distance = int(distance//reducer)
+            print(f"distance: {distance:.0f} - {new_distance:.0f} - {reducer:.1f}")
+            x, y = self.new_point_on_line((x,y), new_distance)
+            print(f"Before: {x},{y}")
         return (int(x), int(y))
 
     def perspective_transform(self, image): 
@@ -55,6 +58,9 @@ class BirdEyeViewMapping():
     def f(self, x, a, b):
         # return a + b * np.log(x)
         return x - ((x*a) * (b**x))
+
+    def f_polynomial(self, x, a = 0.000005, b = 0, c = 1):
+        return a * x**2 + b * x + c
 
     def new_point_on_line(self, target_point, new_distance):
         # Unpack the view point and target point
