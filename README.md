@@ -60,17 +60,10 @@ Contributions are welcome. Please check the issues tab and submit pull requests.
 ## License
 See the [LICENSE](LICENSE) file for details.
 
+## Acknowledgments
 
+I would like to thank the following resources and projects that inspired or contributed to features and helped me:
 
-I have a project and I need a detailed readme template includes a table of contents section.
-My project aims to simulate autonomous car systems. Uses a car game called City Car Gaming with realistic mechanics and graphics enough to track objects. The current features are as follow:
-
-1- Object Tracking: Cars, pedestrians, traffic warnings and everything
-2- Bird's-eye View Mapping: Uses perpectives to transform front cam view to bird's-eye view. Also predicts the objects next path to warn any possible collision. It is still in early stages but bird's-eye view and path prediction works for close distance objects but needs to be improved.
-3- Line Detection: It detects the road lines in front of the car using sliding window techniques.
-
-There is also some future plans to be developed as such as,
-1- Improved bird's-eye view that shows a detailed plan of the environment and pose detection for cars (and maybe training a model to detect terrarian).
-2- Improved next path prediction for moving objects.
-3- A system for creating a path for the to follow with self-driving (### Name the system you chatgpt)
-4- A system for avoiding collisions. (Autobrake or else...)
+- [PanopticBEV](https://panoptic-bev.cs.uni-freiburg.de/)
+- [Rezaei, Mahdi & Terauchi, Mutsuhiro & Klette, Reinhard. (2015). Robust Vehicle Detection and Distance Estimation Under Challenging Lighting Conditions. IEEE Transactions on Intelligent Transportation Systems. ](https://www.researchgate.net/publication/274074437_Robust_Vehicle_Detection_and_Distance_Estimation_Under_Challenging_Lighting_Conditions)
+- [The Ultimate Guide to Real-Time Lane Detection Using OpenCV](https://automaticaddison.com/the-ultimate-guide-to-real-time-lane-detection-using-opencv/)
