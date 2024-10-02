@@ -63,7 +63,7 @@ See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-I would like to thank the following resources and projects that inspired or contributed to features and helped me:
+I would like to thank the following resources and projects that inspired or contributed to features:
 
 - [PanopticBEV](https://panoptic-bev.cs.uni-freiburg.de/):
 ```
