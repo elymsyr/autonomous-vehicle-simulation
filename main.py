@@ -12,7 +12,7 @@ class CityDriveCapture():
     def __init__(self, model_path, window_title='City Car Driving Home Edition Steam', video_output=None, fps=30.0, video_input=None):
         self.window_title = window_title
         self.CLICKED = False
-        
+
         self.model: YOLO = YOLO(model_path)
         self.classes = ['car', 'person']
 
@@ -31,7 +31,7 @@ class CityDriveCapture():
         self.fps = fps
         self.video_writer = None
         self.cap = None
-        
+
         self.move_circles: dict[int, SmoothCircle] = {}
 
     def capture(self, sct):
@@ -273,5 +273,5 @@ class CityDriveCapture():
 
 if '__main__' == __name__:
     model_path = f'weights/yolov8n.pt'
-    agent = CityDriveCapture(model_path=model_path, video_input='media/city_car_test.mp4')
+    agent = CityDriveCapture(model_path=model_path, video_input='media/clip0.mp4')
     agent.window_linux()

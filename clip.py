@@ -1,14 +1,43 @@
 import numpy as np
+from Xlib import X, display
 import cv2, mss
 from time import perf_counter, sleep
 
 class CityDriveCaptureTest():
-    def __init__(self, video_output, fps=30):
+    def __init__(self, video_output, window_title='City Car Driving Home Edition Steam', fps=30):
+        self.window_title= window_title
+        self.display = display.Display()
+        self.root = self.display.screen().root
+        self.window, self.monitor = self.find_window()        
+
         self.fps_list = []
         self.video_output = video_output
         self.fps = fps
         self.video_writer = None
         self.cap = None
+
+    def create_monitor(self, window):
+        geometry = window.query_tree().parent.get_geometry()
+        return {
+            "top": int(geometry.y) + 50,
+            "left": geometry.x + 1,
+            "width": geometry.width - 1,
+            "height": int(geometry.height) - 108
+        }
+
+    def find_window(self):
+        window = None
+        window_id = None
+        window_ids = self.root.get_full_property(self.display.intern_atom('_NET_CLIENT_LIST'), X.AnyPropertyType).value
+        for window_id in window_ids:
+            window = self.display.create_resource_object('window', window_id)
+            window_name_str = window.get_wm_name()
+            if window_name_str and self.window_title in window_name_str:
+                window = window
+                window_id = window_id
+                break
+        monitor = self.create_monitor(window=window) if window else None
+        return window, monitor
 
     def capture(self, sct):
         img = sct.grab(self.monitor)

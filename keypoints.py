@@ -21,7 +21,7 @@ class KeypointTrack():
 
         matches = self.match(keypoints, descriptors)
 
-        frames_image = self.draw_keypoints_movement(image, matches)
+        frames_image = self.draw_keypoints_movement_merged(image, matches)
 
         self.last_frame, self.keypoints, self.descriptors = image, keypoints, descriptors
 
@@ -29,12 +29,18 @@ class KeypointTrack():
     
     def load_points(self, image):
         keypoints = self.detector.detect(image, None)
-        if keypoints is not None:
+        if keypoints is not None: keypoints = [kp for kp in keypoints if kp.size > 60 and kp.response > 0.0001]
+        keypoints, descriptors = self.detector.compute(image, keypoints)
+        if keypoints is not None and descriptors is not None:
             len_before  = len(keypoints)
-            keypoints = [kp for kp in keypoints if kp.size > 110] # kp.response < 0.0001 and 
-            print(f"{len_before}  ->  {len(keypoints)}")
             # for kp in keypoints:
             #     print(kp.size, kp.response)
+            ignored_idx = []
+            matches = self.bf.match(descriptors, descriptors)
+            for match in matches:
+                if match.queryIdx != match.trainIdx: ignored_idx.append(match.queryIdx)
+            keypoints = [value for index, value in enumerate(keypoints) if index not in ignored_idx]
+            if len_before != len(keypoints): print(f"{len_before}  ->  {len(keypoints)}")
         return self.detector.compute(image, keypoints)
 
     def draw_keypoints(self, image, keypoints):
@@ -91,15 +97,14 @@ class KeypointTrack():
             for match in matches:
                 # queryIdx gives keypoint index from target image
                 query_idx = match.queryIdx
-
                 # .trainIdx gives keypoint index from current frame 
                 train_idx = match.trainIdx
 
-                # take coordinates that matches
+                    # take coordinates that matches
                 pt1 = self.keypoints[query_idx].pt
 
                 # current frame keypoints coordinates
                 pt2 = keypoints[train_idx].pt
-                matches_over_frames.append((pt1, pt2))
+                matches_over_frames.append((pt1, pt2))                
         return matches_over_frames
 
