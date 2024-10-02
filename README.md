@@ -15,6 +15,7 @@
   - [Collision Avoidance System](#collision-avoidance-system)
 - [Contributing](#contributing)
 - [License](#license)
+- [Acknowledgments](#acknowledgments)
 
 ## Introduction
 This project simulates autonomous car systems using a game environment called City Car Gaming, known for its realistic mechanics and graphics, sufficient to track objects and simulate real-world scenarios.
