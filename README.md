@@ -65,6 +65,7 @@ See the [LICENSE](LICENSE) file for details.
 I would like to thank the following resources and projects that inspired or contributed to features and helped me:
 
 - [PanopticBEV](https://panoptic-bev.cs.uni-freiburg.de/):
+```
     @article{gosala21bev,
     author={Gosala, Nikhil and Valada, Abhinav},
     journal={IEEE Robotics and Automation Letters}, 
@@ -74,5 +75,6 @@ I would like to thank the following resources and projects that inspired or cont
     number={2},
     pages={1968-1975},
     doi={10.1109/LRA.2022.3142418}}
+```
 - [Rezaei, Mahdi & Terauchi, Mutsuhiro & Klette, Reinhard. (2015). Robust Vehicle Detection and Distance Estimation Under Challenging Lighting Conditions. IEEE Transactions on Intelligent Transportation Systems. ](https://www.researchgate.net/publication/274074437_Robust_Vehicle_Detection_and_Distance_Estimation_Under_Challenging_Lighting_Conditions)
 - [The Ultimate Guide to Real-Time Lane Detection Using OpenCV](https://automaticaddison.com/the-ultimate-guide-to-real-time-lane-detection-using-opencv/)
