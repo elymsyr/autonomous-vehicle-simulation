@@ -1,0 +1,7 @@
+ultralytics==8.2.100
+numpy==1.26.4
+python-xlib==0.33
+mss==9.0.2
+matplotlib==3.9.2
+scikit-learn==1.5.2
+scipy==1.14.1
