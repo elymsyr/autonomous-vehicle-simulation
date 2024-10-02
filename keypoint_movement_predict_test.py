@@ -10,6 +10,15 @@ class CityDriveCaptureTest():
         self.fps = fps
         self.video_writer = None
         self.cap = None
+        self.keypoint_area = np.array(
+            [
+                [0,0],
+                [1080,0],
+                [1080, 270],
+                [0, 270]
+            ]
+        )        
+        
 
     def process_frame(self, show_result):
         currTime = perf_counter()
@@ -17,10 +26,23 @@ class CityDriveCaptureTest():
         self.fps_list.append(fps)
         self.prevTime = currTime
 
-        if show_result:
-            cv2.putText(self.window_image, f"FPS: {int(fps)}", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-            if self.window_image is not None: cv2.imshow(f'YOLOV8 IMAGE', cv2.resize(self.window_image, (self.window_image.shape[1]//2, self.window_image.shape[0]//2)))
+        x, y, w, h = cv2.boundingRect(self.keypoint_area)
+        roi = self.window_image[y:y+h, x:x+w]
+        mask = np.zeros((h, w), dtype=np.uint8)
+        keypoint_area_in_roi = self.keypoint_area - [x, y]
+        cv2.fillPoly(mask, [keypoint_area_in_roi], 255)
+        cropped_image = cv2.bitwise_and(roi, roi, mask=mask)
 
+        self.window_image = cv2.polylines(self.window_image, [self.keypoint_area], isClosed=True, color=(255, 0, 0), thickness=3)
+
+        if show_result:
+            cv2.putText(self.window_image, f"FPS: {int(fps)}", (8, self.height - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            
+            if self.window_image is not None:
+                cv2.imshow('YOLOV8 IMAGE', cv2.resize(self.window_image, (self.window_image.shape[1] // 2, self.window_image.shape[0] // 2)))
+                
+            if cropped_image is not None:
+                cv2.imshow('Clipped YOLOV8 IMAGE', cv2.resize(cropped_image, (cropped_image.shape[1] // 2, cropped_image.shape[0] // 2)))
         if self.video_writer:
             self.video_writer.write(self.window_image)
 
