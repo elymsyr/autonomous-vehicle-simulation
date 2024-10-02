@@ -56,7 +56,7 @@ This system will provide self-driving capabilities by creating a path for the ca
 Introducing a system to prevent collisions using real-time object detection and prediction. Future implementations might include autobraking or steering interventions.
 
 ## Contributing
-Contributions are welcome. Please check the issues tab and submit pull requests.
+Contributions are welcome. Please check the issues tab and submit pull requests. See [here](#.github)...
 
 ## License
 See the [LICENSE](LICENSE) file for details.
