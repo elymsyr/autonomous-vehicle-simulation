@@ -7,6 +7,7 @@ from time import perf_counter
 from lane import *
 from mapping import BirdEyeViewMapping, SmoothCircle
 from collections import defaultdict
+from direction import *
 
 class CityDriveCapture():
     def __init__(self, model_path, window_title='City Car Driving Home Edition Steam', video_output=None, fps=30.0, video_input=None):
@@ -31,6 +32,10 @@ class CityDriveCapture():
         self.fps = fps
         self.video_writer = None
         self.cap = None
+        
+        self.turn: float = 0
+        self.speed: int = 0
+        self.direction_detector = DirectionDetection()
 
         self.move_circles: dict[int, SmoothCircle] = {}
 
@@ -123,6 +128,10 @@ class CityDriveCapture():
         return canvas
 
     def process_frame(self, show_result, canvas):
+        self.direction_detector.load_direction(self.window_image)
+        self.turn = self.direction_detector.turn_on_screen.get()
+        self.speed = self.direction_detector.speed_on_screen.get()
+        
         # Run YOLOv8 to detect cars in the current self.window_image
         results = self.model.track(\
             cv2.rectangle(self.window_image, (int(0.15*self.width), int(0.82*self.height)),\
@@ -138,7 +147,7 @@ class CityDriveCapture():
             names = results[0].names
 
             # self.window_image, self.sliding_windows, *_ = self.lane_detector.detect_lane(self.window_image)
-            # self.sliding_windows, *_ = self.lane_detector.detect_lane(self.window_image)
+            self.sliding_windows, *_ = self.lane_detector.detect_lane(self.window_image)
             self.window_image = results[0].plot(img=self.window_image, line_width=2)
 
             if self.window_image is not None:
@@ -179,14 +188,16 @@ class CityDriveCapture():
 
         # Display results and FPS
         if show_result:
-            cv2.putText(self.window_image, f"FPS: {int(fps)}", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-            if self.window_image is not None and self.sliding_windows is not None:
-                merged_image = np.vstack((cv2.cvtColor(cv2.resize(self.sliding_windows, (811, 414)), cv2.COLOR_GRAY2BGR), cv2.resize(self.window_image, (811, 414))))
-                cv2.imshow(f'{self.window_title} Results', merged_image)
-            else:
-                if canvas is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGEaa', cv2.resize(canvas, (int(canvas.shape[1]//1.6), int(canvas.shape[0]//1.6))))
-                if self.window_image is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGE', cv2.resize(self.window_image, (self.window_image.shape[1]//2, self.window_image.shape[0]//2)))
-                if self.sliding_windows is not None: cv2.imshow(f'{self.window_title} SLIDING WINDOWS IMAGE', cv2.resize(self.sliding_windows, (self.sliding_windows.shape[1]//2, self.sliding_windows.shape[0]//2)))
+            cv2.putText(self.window_image, f"FPS: {int(fps)}", (5, self.height-80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(self.window_image, f"Speed: {self.speed}", (5, self.height-50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(self.window_image, f"Direction: {self.turn:.2f}", (5, self.height-20), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            # if self.window_image is not None and self.sliding_windows is not None:
+            #     merged_image = np.vstack((cv2.cvtColor(cv2.resize(self.sliding_windows, (811, 414)), cv2.COLOR_GRAY2BGR), cv2.resize(self.window_image, (811, 414))))
+            #     cv2.imshow(f'{self.window_title} Results', merged_image)
+            # else:
+            if canvas is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGEaa', cv2.resize(canvas, (int(canvas.shape[1]//1.6), int(canvas.shape[0]//1.6))))
+            if self.window_image is not None: cv2.imshow(f'{self.window_title} YOLOV8 IMAGE', cv2.resize(self.window_image, (self.window_image.shape[1]//2, self.window_image.shape[0]//2)))
+            if self.sliding_windows is not None: cv2.imshow(f'{self.window_title} SLIDING WINDOWS IMAGE', cv2.resize(self.sliding_windows, (self.sliding_windows.shape[1]//2, self.sliding_windows.shape[0]//2)))
 
         # Write self.window_image to video if enabled
         if self.video_writer:
@@ -273,5 +284,5 @@ class CityDriveCapture():
 
 if '__main__' == __name__:
     model_path = f'weights/yolov8n.pt'
-    agent = CityDriveCapture(model_path=model_path, video_input='media/clip0.mp4')
+    agent = CityDriveCapture(model_path=model_path, video_input='test_media/clip0.mp4')
     agent.window_linux()
