@@ -6,7 +6,7 @@ DIGITS_LOOKUP = {
 	(1, 1, 1, 0, 1, 1, 1): 0,
 	(0, 0, 0, 0, 0, 0, 0): 0,
 	(0, 0, 1, 0, 0, 1, 0): 1,
-	(1, 0, 1, 1, 1, 1, 0): 2,
+	(1, 0, 1, 1, 1, 0, 1): 2,
 	(1, 0, 1, 1, 0, 1, 1): 3,
 	(0, 1, 1, 1, 0, 1, 0): 4,
 	(1, 1, 0, 1, 0, 1, 1): 5,
@@ -16,12 +16,29 @@ DIGITS_LOOKUP = {
 	(1, 1, 1, 1, 0, 1, 1): 9
 }
 
+class Digits():
+    def __init__(self) -> None:
+        self.digits: dict[str, int] = {'0': 0, '1': 0, '2': 0}
+        
+    def update(self, number: int, idx = None):
+        if idx and isinstance(idx, int) and idx >= 0 and idx <= 2: self.digits[f"{idx}"] = number
+        else:
+            if len(str(number)) <= 3:
+                number = str(number)
+                while len(number) != 3: number = f"0{number}"
+                for idx, value in enumerate(number):
+                    self.digits[f"{idx}"] = int(number)
+    def get(self):
+        return int(str(self.digits["0"])+str(self.digits["1"])+str(self.digits["2"]))
+
 class CityDriveCaptureTest():
     def __init__(self, fps=100.0, video_input=None):
         self.fps_list = []
         self.video_input = video_input
         self.fps = fps
         self.cap = None
+        self.digits_on_screen = Digits()
+        self.turn_on_screen: int = 20
         self.areas = {
             'speed': 2*np.array([
                 [74, 44],
@@ -39,20 +56,24 @@ class CityDriveCaptureTest():
         self.digits = [
             np.array([
                 [0, 0],
-                [19, 0],
-                [19, 33],
+                [20, 0],
+                [20, 33],
                 [0, 33]],dtype=np.int32),
             np.array([
-                [21, 0],
-                [42, 0],
-                [42, 33],
-                [21, 33]],dtype=np.int32),
+                [23, 0],
+                [43, 0],
+                [43, 33],
+                [23, 33]],dtype=np.int32),
             np.array([
-                [44, 0],
+                [45, 0],
                 [65, 0],
                 [65, 33],
-                [44, 33]],dtype=np.int32)            
-        ]      
+                [45, 33]],dtype=np.int32)
+        ]
+        # modify_src_points = lambda width, height, margin : np.array([[0, x], [y, 0], [19, 33], [0, 33]], dtype=np.int32)
+        self.src_points = np.array([[3, 0],[20, 0],[17, 33],[0, 33]],dtype=np.float32)
+        self.dst_points = np.array([[0,0], [20,0], [20,33], [0,33]], dtype=np.float32)
+        self.matrix = cv2.getPerspectiveTransform(self.src_points, self.dst_points)
 
     def process_frame(self, show_result):
         currTime = perf_counter()
@@ -129,76 +150,55 @@ class CityDriveCaptureTest():
     def turn_detection(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         _, thresholded = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
-        # Find contours of the moving part
         contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Loop through contours to find the bounding box of the green part
+        biggest_x = 0
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
-            
-            # You may add criteria to filter the right part based on size, aspect ratio, etc.
-            
-            # Draw bounding box
             image = cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            
-            # Print or track the horizontal position (x)
-            print("Horizontal position (x):", x)
+            if x > biggest_x: biggest_x = x
+        self.turn_on_screen = biggest_x
+        print("Turn: ", self.turn_on_screen)
         return image
 
     def speed_detection(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         _, thresholded = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
-        # # Find contours of the moving part
-        # contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # for contour in contours:
-        #     x, y, w, h = cv2.boundingRect(contour)
-
-        #     # You may add criteria to filter the right part based on size, aspect ratio, etc.
-
-        #     # Draw bounding box
-        #     image = cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        i = 0
-        digits = []
-        for digit in self.digits:
+        for idx, digit in enumerate(self.digits):
             x, y, w, h = cv2.boundingRect(digit)
-            roi = thresholded[y:y+h, x:x+w]        
+            roi = thresholded[y:y+h, x:x+w]
 
-            # roiH, roiW, *_ = roi.shape
-            # (dW, dH) = (int(roiW * 0.25), int(roiH * 0.15))
-            # dHC = int(roiH * 0.05)
-            # # define the set of 7 segments
-            # segments = [
-            #     ((0, 0), (w, dH)),	# top
-            #     ((0, 0), (dW, h // 2)),	# top-left
-            #     ((w - dW, 0), (w, h // 2)),	# top-right
-            #     ((0, (h // 2) - dHC) , (w, (h // 2) + dHC)), # center
-            #     ((0, h // 2), (dW, h)),	# bottom-left
-            #     ((w - dW, h // 2), (w, h)),	# bottom-right
-            #     ((0, h - dH), (w, h))	# bottom
-            # ]
-            # on = [0] * len(segments)
+            roi = cv2.warpPerspective(roi, self.matrix, (20,33))
+
+            roiH, roiW, *_ = roi.shape
+            (dW, dH) = (int(roiW * 0.25), int(roiH * 0.15))
+            dHC = int(roiH * 0.05)
+
+            segments = [
+                ((0, 0), (w, dH)),	# top
+                ((0, 0), (dW, h // 2)),	# top-left
+                ((w - dW, 0), (w, h // 2)),	# top-right
+                ((0, (h // 2) - dHC) , (w, (h // 2) + dHC)), # center
+                ((0, h // 2), (dW, h)),	# bottom-left
+                ((w - dW, h // 2), (w, h)),	# bottom-right
+                ((0, h - dH), (w, h))	# bottom
+            ]
+            on = [0] * len(segments)
             
-            # for (i, ((xA, yA), (xB, yB))) in enumerate(segments):
-            #     # extract the segment ROI, count the total number of
-            #     # thresholded pixels in the segment, and then compute
-            #     # the area of the segment
-            #     segROI = roi[yA:yB, xA:xB]
-            #     total = cv2.countNonZero(segROI)
-            #     area = (xB - xA) * (yB - yA)
-            #     # if the total number of non-zero pixels is greater than
-            #     # 50% of the area, mark the segment as "on"
-            #     if total / float(area) > 0.5:
-            #         on[i]= 1
-            # lookup the digit and draw it on the image
+            for (i, ((xA, yA), (xB, yB))) in enumerate(segments):
+                segROI = roi[yA:yB, xA:xB]
+                total = cv2.countNonZero(segROI)
+                area = (xB - xA) * (yB - yA)
+                if total / float(area) > 0.5:
+                    on[i]= 1
             try:
-                # digit = DIGITS_LOOKUP[tuple(on)]
-                # digits.append(digit)
-                cv2.imshow(f"{i}", roi)
-                i += 1
+                digit = DIGITS_LOOKUP[tuple(on)]
+                self.digits_on_screen.update(digit, idx)
             except: pass
             
-            # thresholded = cv2.polylines(thresholded, [digit], isClosed=True, color=(255, 0, 0), thickness=1)
-
+            cv2.imshow(f"{idx}", cv2.resize(roi, (roi.shape[1]*2, roi.shape[0]*2)))
+        
+        print("Speed: ", self.digits_on_screen.get())
+        
         return thresholded
 
 if '__main__' == __name__:
