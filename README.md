@@ -22,18 +22,18 @@ This project simulates autonomous car systems using a game environment called Ci
 ## Features
 
 #### Object Tracking
-The system tracks various objects in the game environment using [yolov8n](weights) model.
 <img src="media\track0.png" alt="object_2" width="400"/><img src="media\track1.png" alt="object_2" width="400"/>
+The system tracks various objects in the game environment using [yolov8n](weights) model.
 
 ### Bird's-eye View Mapping
+<img src="media\bev0.png" alt="object_2" width="400"/><img src="media\bev1.png" alt="object_2" width="400"/>
 Transforms the front camera view into a bird's-eye view to map surroundings and predict the next path of objects. Currently, it is able to:
 - Show a bird's-eye view for close distance objects
 - Warn about possible collisions based on short-range predictions but only in straight road for now
-<img src="media\bev0.png" alt="object_2" width="400"/><img src="media\bev1.png" alt="object_2" width="400"/>
 
 ### Line Detection
-Detects road lines using a sliding window technique, which assists in maintaining lane integrity.
 <img src="media\line0.png" alt="object_2" width="400"/><img src="media\line1.png" alt="object_2" width="400"/>
+Detects road lines using a sliding window technique, which assists in maintaining lane integrity.
 
 ## Installation
 ```
