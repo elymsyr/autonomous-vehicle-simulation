@@ -137,7 +137,7 @@ class CityDriveCapture():
             cv2.rectangle(self.window_image, (int(0.15*self.width), int(0.82*self.height)),\
                 (int(0.85*self.width), int(self.height)),\
                     (0,0,0), -1),\
-                        persist=True, verbose=False)
+                        persist=True, verbose=False, tracker = 'botsort.yaml')
 
         if results and results[0].boxes is not None and results[0].boxes.id is not None:
             # Get the boxes and track IDs
@@ -283,6 +283,6 @@ class CityDriveCapture():
             cv2.destroyAllWindows()
 
 if '__main__' == __name__:
-    model_path = f'weights/yolov8n.pt'
+    model_path = f'weights/yolo11n.pt'
     agent = CityDriveCapture(model_path=model_path, video_input='test_media/clip0.mp4')
     agent.window_linux()
