@@ -9,8 +9,18 @@ from mapping import BirdEyeViewMapping, SmoothCircle
 from collections import defaultdict
 from direction import *
 
-class CityDriveCapture():
-    def __init__(self, model_path, window_title='City Car Driving Home Edition Steam', video_output=None, fps=30.0, video_input=None):
+class CityDriveCapture:
+    def __init__(self, model_path: str, window_title: str = 'City Car Driving Home Edition Steam', video_output: str = None, fps: float = 30.0, video_input: str = None) -> None:
+        """
+        Initialize the CityDriveCapture object with model path and other parameters.
+
+        Args:
+            model_path (str): Path to the YOLO model.
+            window_title (str, optional): Title of the window. Defaults to 'City Car Driving Home Edition Steam'.
+            video_output (str, optional): Path for the video output file. Defaults to None.
+            fps (float, optional): Frames per second for video processing. Defaults to 30.0.
+            video_input (str, optional): Path for the video input file. Defaults to None.
+        """
         self.window_title = window_title
         self.CLICKED = False
 
@@ -39,11 +49,29 @@ class CityDriveCapture():
 
         self.move_circles: dict[int, SmoothCircle] = {}
 
-    def capture(self, sct):
+    def capture(self, sct) -> np.ndarray:
+        """
+        Capture an image from the screen.
+
+        Args:
+            sct: The screen capture object.
+
+        Returns:
+            np.ndarray: Captured image in BGR format.
+        """
         img = sct.grab(self.monitor)
         return cv2.cvtColor(np.array(img), cv2.COLOR_BGRA2BGR)
 
-    def create_monitor(self, window):
+    def create_monitor(self, window) -> dict:
+        """
+        Create a monitor object to define the capture region.
+
+        Args:
+            window: The window object to monitor.
+
+        Returns:
+            dict: A dictionary containing the monitor dimensions.
+        """
         geometry = window.query_tree().parent.get_geometry()
         return {
             "top": int(geometry.y) + 50,
@@ -52,7 +80,13 @@ class CityDriveCapture():
             "height": int(geometry.height) - 108
         }
 
-    def find_window(self):
+    def find_window(self) -> tuple:
+        """
+        Find the window by its title.
+
+        Returns:
+            tuple: The window object and its monitor dimensions.
+        """
         window = None
         window_id = None
         window_ids = self.root.get_full_property(self.display.intern_atom('_NET_CLIENT_LIST'), X.AnyPropertyType).value
@@ -66,25 +100,19 @@ class CityDriveCapture():
         monitor = self.create_monitor(window=window) if window else None
         return window, monitor
 
-    def estimate_distance(self, bbox_width, bbox_height, label):
-        # For simplicity, assume the distance is inversely proportional to the box size
-        # This is a basic estimation, you may use camera calibration for more accuracy
-        objects = {
-            'car': {
-                'focal_length': 800,
-                'known_width': 1.9,
-            },
-            'person': {
-                'focal_length': 700,
-                'known_width': 1.6,
-            }
-        }
-        if label in objects.keys():
-            distance = (objects[label]['known_width'] * objects[label]['focal_length']) / (bbox_width if label == 'car' else bbox_height)  # Basic distance estimation
-            return distance
-        else: 0
+    def bev(self, transformed_point: tuple, id: int, canvas: np.ndarray, predicted_points: list = None) -> np.ndarray:
+        """
+        Draw a circle and text for a detected object in the canvas.
 
-    def bev(self, transformed_point, id, canvas, predicted_points = None):
+        Args:
+            transformed_point (tuple): The point to be transformed and drawn.
+            id (int): The ID of the detected object.
+            canvas (np.ndarray): The canvas on which to draw.
+            predicted_points (list, optional): Predicted points for the object. Defaults to None.
+
+        Returns:
+            np.ndarray: Updated canvas with the drawn circle and text.
+        """
         radius = 16
         canvas = cv2.circle(canvas, transformed_point, radius, (255, 0, 0), -1)
         text = str(id)
@@ -98,13 +126,33 @@ class CityDriveCapture():
 
         return canvas
 
-    def check_alert_area(self, points):
+    def check_alert_area(self, points: list) -> list:
+        """
+        Check if any of the given points are within the alert area.
+
+        Args:
+            points (list): List of points to check.
+
+        Returns:
+            list: List of boolean values indicating if each point is in the alert area.
+        """
         point_checked = []
         for point in points:
             point_checked.append(True if self.bev_transformer.area_check(point=point) else False)
         return point_checked
 
-    def draw_lines_and_circle(self, predicted_points, canvas, start_point):
+    def draw_lines_and_circle(self, predicted_points: list, canvas: np.ndarray, start_point: tuple) -> np.ndarray:
+        """
+        Draw lines and a circle based on the predicted points.
+
+        Args:
+            predicted_points (list): List of predicted points.
+            canvas (np.ndarray): The canvas on which to draw.
+            start_point (tuple): The starting point for the lines.
+
+        Returns:
+            np.ndarray: Updated canvas with lines and a circle drawn.
+        """
         start_point = tuple(map(int, start_point))
         points_to_draw = [start_point] + predicted_points
         
@@ -127,7 +175,14 @@ class CityDriveCapture():
         canvas = cv2.putText(canvas, distance_text, (text_x, text_y), font, font_scale, (0, 0, 255), thickness)
         return canvas
 
-    def process_frame(self, show_result, canvas):
+    def process_frame(self, show_result: bool, canvas: np.ndarray) -> None:
+        """
+        Process a frame for object detection and display results.
+
+        Args:
+            show_result (bool): Flag indicating whether to display the results.
+            canvas (np.ndarray): The canvas on which to draw results.
+        """
         self.direction_detector.load_direction(self.window_image)
         self.turn = self.direction_detector.turn_on_screen.get()
         self.speed = self.direction_detector.speed_on_screen.get()
@@ -203,7 +258,18 @@ class CityDriveCapture():
         if self.video_writer:
             self.video_writer.write(self.window_image)
 
-    def capture_from_video(self, show_result=True):
+    def capture_from_video(self, show_result: bool = True) -> None:
+        """
+        Captures frames from the specified video file, processes each frame, 
+        and optionally displays the results in a window.
+
+        Parameters:
+            show_result (bool): If True, displays the processed frames in a window.
+                                Default is True.
+        
+        Returns:
+            None: The method processes the video frames and manages display/output.
+        """        
         self.cap = cv2.VideoCapture(self.video_input)
 
         if not self.cap.isOpened():
@@ -243,7 +309,18 @@ class CityDriveCapture():
 
         cv2.destroyAllWindows()
 
-    def window_linux(self, show_result: bool = True):
+    def window_linux(self, show_result: bool = True) -> None:
+        """
+        Captures video either from a file or from the screen, processes each frame, 
+        and displays the results in a window.
+
+        Parameters:
+            show_result (bool): If True, displays the processed frames in a window.
+                                Default is True.
+
+        Returns:
+            None: The method processes the video frames and manages display/output.
+        """        
         if self.video_input:  # Run from video if provided
             self.capture_from_video(show_result)
         else:  # Run from window capture

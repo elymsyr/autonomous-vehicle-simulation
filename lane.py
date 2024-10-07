@@ -21,21 +21,49 @@ import time
 from ultralytics import YOLO
 import matplotlib.pyplot as plt
 
-class LaneDetector():
-    def __init__(self, width, height):
+class LaneDetector:
+    def __init__(self, width: int, height: int) -> None:
+        """
+        Initialize the LaneDetector object with image dimensions.
+
+        Args:
+            width (int): Width of the image.
+            height (int): Height of the image.
+        """
         self.width = width
         self.height = height
 
-    # Function to mask out the region of interest
-    def region_of_interest(self, img, vertices):
+    def region_of_interest(self, img: np.ndarray, vertices: np.ndarray) -> np.ndarray:
+        """
+        Apply a mask to the image to focus on the region of interest.
+
+        Args:
+            img (np.ndarray): Input image.
+            vertices (np.ndarray): Array of vertices defining the region of interest.
+
+        Returns:
+            np.ndarray: Masked image with only the region of interest.
+        """
         mask = np.zeros_like(img)
         match_mask_color = 255
         cv2.fillPoly(mask, vertices, match_mask_color)
         masked_image = cv2.bitwise_and(img, mask)
         return masked_image
 
-    # Function to draw the filled polygon between the lane lines
-    def draw_lane_lines(self, img, left_line, right_line, color=[0, 255, 0], thickness=10):
+    def draw_lane_lines(self, img: np.ndarray, left_line: list, right_line: list, color: list = [0, 255, 0], thickness: int = 10) -> np.ndarray:
+        """
+        Draw a filled polygon between the detected lane lines on the image.
+
+        Args:
+            img (np.ndarray): Original image.
+            left_line (list): Coordinates of the left lane line.
+            right_line (list): Coordinates of the right lane line.
+            color (list, optional): Color of the polygon. Defaults to [0, 255, 0].
+            thickness (int, optional): Thickness of the lines. Defaults to 10.
+
+        Returns:
+            np.ndarray: Image with the polygon overlay.
+        """
         line_img = np.zeros_like(img)
         poly_pts = np.array([[
             (left_line[0], left_line[1]),
@@ -43,39 +71,38 @@ class LaneDetector():
             (right_line[2], right_line[3]),
             (right_line[0], right_line[1])
         ]], dtype=np.int32)
-        
-        # Fill the polygon between the lines
+
         cv2.fillPoly(line_img, poly_pts, color)
-        
-        # Overlay the polygon onto the original image
         img = cv2.addWeighted(img, 0.8, line_img, 0.5, 0.0)
         return img
 
-    # The lane detection pipeline
-    def pipeline(self, image):
+    def pipeline(self, image: np.ndarray) -> np.ndarray:
+        """
+        The lane detection pipeline for processing the input image.
+
+        Args:
+            image (np.ndarray): Input image.
+
+        Returns:
+            np.ndarray: Image with detected lanes.
+        """
         region_of_interest_vertices = [
             (0, self.height),
             (self.width / 2, self.height / 2),
             (self.width, self.height),
         ]
-        
-        polygon = np.array(region_of_interest_vertices, np.int32)
-        polygon = polygon.reshape((-1, 1, 2))  # Reshape for polylines
 
-        # Draw the polygon outline
+        polygon = np.array(region_of_interest_vertices, np.int32)
+        polygon = polygon.reshape((-1, 1, 2))
         cv2.polylines(image, [polygon], isClosed=True, color=(255, 120, 0), thickness=2)
 
-        # Convert to grayscale and apply Canny edge detection
         gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         cannyed_image = cv2.Canny(gray_image, 100, 200)
-
-        # Mask out the region of interest
         cropped_image = self.region_of_interest(
             cannyed_image,
             np.array([region_of_interest_vertices], np.int32)
         )
 
-        # Perform Hough Line Transformation to detect lines
         lines = cv2.HoughLinesP(
             cropped_image,
             rho=6,
@@ -86,7 +113,6 @@ class LaneDetector():
             maxLineGap=25
         )
 
-        # Separating left and right lines based on slope
         left_line_x = []
         left_line_y = []
         right_line_x = []
@@ -98,34 +124,32 @@ class LaneDetector():
         for line in lines:
             for x1, y1, x2, y2 in line:
                 slope = (y2 - y1) / (x2 - x1) if (x2 - x1) != 0 else 0
-                if math.fabs(slope) < 0.5:  # Ignore nearly horizontal lines
+                if math.fabs(slope) < 0.5:
                     continue
-                if slope <= 0:  # Left lane
+                if slope <= 0:
                     left_line_x.extend([x1, x2])
                     left_line_y.extend([y1, y2])
-                else:  # Right lane
+                else:
                     right_line_x.extend([x1, x2])
                     right_line_y.extend([y1, y2])
 
-        # Fit a linear polynomial to the left and right lines
-        min_y = int(image.shape[0] * (3 / 5))  # Slightly below the middle of the image
-        max_y = image.shape[0]  # Bottom of the image
+        min_y = int(image.shape[0] * (3 / 5))
+        max_y = image.shape[0]
 
         if left_line_x and left_line_y:
             poly_left = np.poly1d(np.polyfit(left_line_y, left_line_x, deg=1))
             left_x_start = int(poly_left(max_y))
             left_x_end = int(poly_left(min_y))
         else:
-            left_x_start, left_x_end = 0, 0  # Defaults self, if no lines detected
+            left_x_start, left_x_end = 0, 0
 
         if right_line_x and right_line_y:
             poly_right = np.poly1d(np.polyfit(right_line_y, right_line_x, deg=1))
             right_x_start = int(poly_right(max_y))
             right_x_end = int(poly_right(min_y))
         else:
-            right_x_start, right_x_end = 0, 0  # Defaults self, if no lines detected
+            right_x_start, right_x_end = 0, 0
 
-        # Create the filled polygon between the left and right lane lines
         lane_image = self.draw_lane_lines(
             image,
             [left_x_start, max_y, left_x_end, min_y],
@@ -134,34 +158,45 @@ class LaneDetector():
 
         return lane_image
 
-class LaneDetectorU():
-    def __init__(self, width, height, window_count = 8, margin = None):
+
+class LaneDetectorU:
+    def __init__(self, width: int, height: int, window_count: int = 8, margin: int = None) -> None:
+        """
+        Initialize the LaneDetectorU object with image dimensions and other parameters.
+
+        Args:
+            width (int): Width of the image.
+            height (int): Height of the image.
+            window_count (int, optional): Number of sliding windows for lane detection. Defaults to 8.
+            margin (int, optional): Margin size for the sliding windows. Defaults to calculated value if None.
+        """
         self.width = width
         self.height = height
         self.window_count = window_count
         self.interest_vertices = [
-            (int(0.33*self.width), int(0.64*self.height)), # left top
-            (int(0.05*self.width), int(0.95*self.height)), # left bottom
-            (int(0.64*self.width), int(0.64*self.height)), # right top
-            (int(0.9*self.width), int(0.95*self.height)), # right bottom
+            (int(0.33 * self.width), int(0.64 * self.height)),
+            (int(0.05 * self.width), int(0.95 * self.height)),
+            (int(0.64 * self.width), int(0.64 * self.height)),
+            (int(0.9 * self.width), int(0.95 * self.height)),
         ]
         self.desired_points = np.float32(self.interest_vertices)
         self.image_corners = np.float32([[0, 0], [0, self.height], [self.width, 0], [self.width, self.height]])
         self.matrix = cv2.getPerspectiveTransform(self.desired_points, self.image_corners)
-        self.inv_matrix = cv2.getPerspectiveTransform(self.image_corners, self.desired_points)        
-        
-        if margin is None: self.margin = int((1/12) * self.width)
-        self.minpix = int((1/24) * self.width)
-        
-        cv2.namedWindow("Trackbars")
-        cv2.createTrackbar("L - H", "Trackbars", 0, 255, lambda x: None)  # 0-179 for Hue
-        cv2.createTrackbar("L - S", "Trackbars", 0, 255, lambda x: None)  # 0-255 for Saturation
-        cv2.createTrackbar("L - V", "Trackbars", 150, 255, lambda x: None)  # 0-255 for Value
-        cv2.createTrackbar("U - H", "Trackbars", 255, 255, lambda x: None)  # 0-179 for Hue
-        cv2.createTrackbar("U - S", "Trackbars", 255, 255, lambda x: None)  # 0-255 for Saturation
-        cv2.createTrackbar("U - V", "Trackbars", 255, 255, lambda x: None)  # 0-255 for Value
+        self.inv_matrix = cv2.getPerspectiveTransform(self.image_corners, self.desired_points)
 
-    def detect_lane(self, img: np.ndarray):
+        if margin is None:
+            self.margin = int((1 / 12) * self.width)
+        self.minpix = int((1 / 24) * self.width)
+
+        cv2.namedWindow("Trackbars")
+        cv2.createTrackbar("L - H", "Trackbars", 0, 255, lambda x: None)
+        cv2.createTrackbar("L - S", "Trackbars", 0, 255, lambda x: None)
+        cv2.createTrackbar("L - V", "Trackbars", 150, 255, lambda x: None)
+        cv2.createTrackbar("U - H", "Trackbars", 255, 255, lambda x: None)
+        cv2.createTrackbar("U - S", "Trackbars", 255, 255, lambda x: None)
+        cv2.createTrackbar("U - V", "Trackbars", 255, 255, lambda x: None)
+
+    def detect_lane(self, img: np.ndarray) -> tuple:
         transformed_frame = cv2.warpPerspective(img, self.matrix, (self.width, self.height))
         hsv_transformed_frame = cv2.cvtColor(transformed_frame, cv2.COLOR_BGR2HSV)
 
